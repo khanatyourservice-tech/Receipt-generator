@@ -6,14 +6,27 @@
   <title>Islaah Foundation | Official Receipt Generator</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts matching your exact sample receipt -->
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Great+Vibes&family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
   <!-- html2pdf.js for high-resolution PDF generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     .font-serif-italic { font-family: 'Playfair Display', Georgia, serif; }
-    .font-signature { font-family: 'Great Vibes', cursive; }
-    .stamp-received { transform: rotate(-12deg); }
-    .stamp-approved { transform: rotate(-11deg); }
+    .font-signature { font-family: 'Alex Brush', cursive; }
+    
+    /* Exact Fixed Proportions matching your sample receipt image */
+    #receipt-wrapper {
+      width: 100%;
+      overflow-x: auto;
+      display: flex;
+      justify-content: center;
+    }
+    #receipt-canvas {
+      width: 520px;
+      min-width: 520px;
+      min-height: 755px;
+      background-color: #faf8f2;
+      box-sizing: border-box;
+    }
   </style>
 </head>
 <body class="bg-slate-100 min-h-screen text-slate-800 pb-14">
@@ -25,7 +38,7 @@
         <span class="text-2xl">🕌</span>
         <div>
           <h1 class="text-lg font-bold tracking-wider">ISLAAH FOUNDATION</h1>
-          <p class="text-[11px] text-emerald-200">Official Receipt Generator & Database Portal</p>
+          <p class="text-[11px] text-emerald-200">Official Receipt Generator & Donor Database</p>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -41,14 +54,16 @@
     <!-- ================= LEFT COLUMN: FORM INPUTS & SHARE BUTTONS ================= -->
     <div class="lg:col-span-5 space-y-5">
       <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-        <h2 class="text-base font-bold text-[#0b3b24] border-b pb-2 mb-4 flex justify-between items-center">
-          <span>1. Enter Donation Details</span>
-          <span class="text-[11px] font-normal text-slate-400">Live Preview →</span>
-        </h2>
+        <div class="flex justify-between items-center border-b pb-2 mb-4">
+          <h2 class="text-base font-bold text-[#0b3b24]">1. Enter Receipt Details</h2>
+          <button type="button" onclick="resetForNewReceipt()" class="text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded font-semibold hover:bg-emerald-100">
+            + Reset Form
+          </button>
+        </div>
 
         <form id="receiptForm" class="space-y-3.5" onsubmit="handleSaveAndGenerate(event)">
           
-          <!-- Receipt No & Date -->
+          <!-- Receipt No & Datepicker -->
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block text-xs font-semibold text-slate-600 mb-1">Receipt No *</label>
@@ -57,19 +72,53 @@
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-600 mb-1">Date *</label>
-              <input type="text" id="receiptDate" required oninput="updateReceipt()"
+              <input type="date" id="receiptDateInput" required onchange="updateReceipt()"
                 class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-700 outline-none">
             </div>
           </div>
 
-          <!-- Received with thanks from -->
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Received with thanks from (Donor Name) *</label>
-            <input type="text" id="donorName" placeholder="e.g. Mr. Ahmed Khan" required oninput="updateReceipt()"
+          <!-- Donor Name with Auto-Search from Firebase -->
+          <div class="relative">
+            <div class="flex justify-between items-center mb-1">
+              <label class="block text-xs font-semibold text-slate-600">Received with thanks from (Donor Name) *</label>
+              <span id="donorBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                New Donor
+              </span>
+            </div>
+            <input type="text" id="donorName" list="existingDonorsList" autocomplete="off" placeholder="Start typing name to search or add new..." required oninput="handleDonorNameInput()"
               class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-semibold focus:ring-2 focus:ring-emerald-700 outline-none">
+            <datalist id="existingDonorsList"></datalist>
           </div>
 
-          <!-- Amount & Payment Mode -->
+          <!-- Existing Donor Extracted Info Banner (Shown ONLY when existing donor is matched) -->
+          <div id="existingDonorBanner" class="hidden bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-900">
+            <div class="font-bold flex items-center justify-between">
+              <span>✓ Existing Donor Found in Database</span>
+            </div>
+            <p class="mt-1 text-slate-600">
+              📱 Phone: <strong id="extractedPhoneDisplay" class="text-slate-900">—</strong> | 
+              ✉️ Email: <strong id="extractedEmailDisplay" class="text-slate-900">—</strong>
+            </p>
+          </div>
+
+          <!-- First-Time Donor Contact Fields (Shown ONLY for New Donors) -->
+          <div id="newDonorContactSection" class="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+            <p class="text-[11px] font-bold uppercase text-emerald-800">1st-Time Donor Contact (Saved for Future Receipts)</p>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">WhatsApp / Phone *</label>
+                <input type="tel" id="donorPhone" placeholder="9876543210" required
+                  class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-700 outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Email ID</label>
+                <input type="email" id="donorEmail" placeholder="donor@email.com"
+                  class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-700 outline-none">
+              </div>
+            </div>
+          </div>
+
+          <!-- Amount & Payment Mode Dropdown -->
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block text-xs font-semibold text-slate-600 mb-1">Amount Received (₹) *</label>
@@ -78,80 +127,53 @@
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-600 mb-1">Payment Mode *</label>
-              <input type="text" id="paymentMode" list="paymentOptions" value="UPI" required oninput="updateReceipt()"
-                placeholder="UPI / Cash / Bank Transfer"
+              <select id="paymentMode" onchange="updateReceipt()"
+                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-medium focus:ring-2 focus:ring-emerald-700 outline-none">
+                <option value="UPI">UPI</option>
+                <option value="Cash">Cash</option>
+                <option value="Net Banking">Net Banking</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Donation Type Dropdown & Purpose (Additional Info) Textbox -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Donation Type *</label>
+              <select id="donationType" onchange="updateReceipt()"
+                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-medium focus:ring-2 focus:ring-emerald-700 outline-none">
+                <option value="Monthly Donation">Monthly Donation</option>
+                <option value="Zakat">Zakat</option>
+                <option value="Sadqa Nafila">Sadqa Nafila</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Purpose (Additional Info)</label>
+              <input type="text" id="purposeInfo" placeholder="e.g. Medical Aid, Education..." oninput="updateReceipt()"
                 class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-700 outline-none">
-              <datalist id="paymentOptions">
-                <option value="UPI">
-                <option value="Cash">
-                <option value="Bank Transfer">
-                <option value="UPI / Cash / Bank Transfer">
-                <option value="Cheque">
-              </datalist>
             </div>
           </div>
 
-          <!-- Purpose -->
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Purpose *</label>
-            <input type="text" id="purpose" list="purposeOptions" value="Donation" required oninput="updateReceipt()"
-              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-700 outline-none">
-            <datalist id="purposeOptions">
-              <option value="Donation">
-              <option value="Zakat">
-              <option value="Sadaqah">
-              <option value="Lillah">
-              <option value="Education & Welfare Aid">
-              <option value="Medical Relief">
-            </datalist>
-          </div>
-
-          <!-- Donor Phone & Email for Direct Delivery -->
-          <div class="pt-3 border-t border-slate-200">
-            <p class="text-[11px] font-bold uppercase text-emerald-800 mb-2">Donor Phone & Email (For Direct Delivery)</p>
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">WhatsApp / Phone No *</label>
-                <input type="tel" id="donorPhone" placeholder="9876543210" required
-                  class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-700 outline-none">
-              </div>
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">Donor Email (Optional)</label>
-                <input type="email" id="donorEmail" placeholder="donor@email.com"
-                  class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-700 outline-none">
-              </div>
-            </div>
-          </div>
-
-          <!-- Expandable Settings: Foundation Details & Google Sheet Webhook -->
-          <details class="pt-2 text-xs text-slate-600">
+          <!-- Expandable Google Sheet Webhook & QR Settings -->
+          <details class="pt-1 text-xs text-slate-600">
             <summary class="cursor-pointer font-semibold text-slate-500 hover:text-slate-800">
-              ⚙️ Customize Foundation Details, QR & Google Sheet Link
+              ⚙️ QR Code & Google Sheet Webhook Settings
             </summary>
-            <div class="mt-3 space-y-2.5 bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <div class="mt-2.5 space-y-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
               <div>
-                <label class="block text-[11px] font-semibold">Foundation Contact Phone (Footer)</label>
-                <input type="text" id="orgPhone" value="+91 98765 43210" oninput="saveOrgSettings()"
-                  class="w-full px-2.5 py-1.5 border rounded text-xs">
-              </div>
-              <div>
-                <label class="block text-[11px] font-semibold">Foundation Email (Footer)</label>
-                <input type="text" id="orgEmail" value="info@islaahfoundation.org" oninput="saveOrgSettings()"
-                  class="w-full px-2.5 py-1.5 border rounded text-xs">
-              </div>
-              <div>
-                <label class="block text-[11px] font-semibold">QR Code Link / UPI Link (e.g. upi://pay?pa=YOUR_UPI)</label>
+                <label class="block text-[11px] font-semibold">QR Code Link / UPI Link</label>
                 <input type="text" id="qrData" value="https://islaahfoundation.org" oninput="saveOrgSettings()"
-                  class="w-full px-2.5 py-1.5 border rounded text-xs">
+                  class="w-full px-2.5 py-1.5 border rounded text-xs bg-white">
               </div>
               <div>
-                <label class="block text-[11px] font-semibold text-emerald-800">Google Apps Script Web App URL (For GSheet + Email)</label>
+                <label class="block text-[11px] font-semibold text-emerald-800">Google Apps Script URL (For GSheet + Email)</label>
                 <input type="text" id="gsheetUrl" placeholder="https://script.google.com/macros/s/.../exec" oninput="saveOrgSettings()"
-                  class="w-full px-2.5 py-1.5 border rounded text-xs">
+                  class="w-full px-2.5 py-1.5 border rounded text-xs bg-white">
               </div>
             </div>
           </details>
 
+          <!-- SAVE BUTTON: ONLY VISIBLE FOR NEW DONORS -->
           <button type="submit" id="saveBtn"
             class="w-full bg-[#0b3b24] hover:bg-emerald-950 text-white font-semibold py-2.5 rounded-lg shadow transition text-sm">
             💾 Save to Firebase + GSheet & Lock Receipt
@@ -164,7 +186,7 @@
           
           <button onclick="sharePDFViaWhatsApp()" type="button" id="waBtn"
             class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 shadow-sm transition text-sm">
-            <span>📲 Send PDF to Donor's Phone (WhatsApp / Share)</span>
+            <span>📲 Send PDF via WhatsApp / Phone</span>
           </button>
 
           <div class="grid grid-cols-2 gap-2.5">
@@ -181,224 +203,221 @@
       </div>
     </div>
 
-    <!-- ================= RIGHT COLUMN: EXACT SAMPLE RECEIPT REPLICA ================= -->
+    <!-- ================= RIGHT COLUMN: IMAGE-ACCURATE SAMPLE RECEIPT ================= -->
     <div class="lg:col-span-7 flex flex-col items-center">
-      <div class="w-full max-w-[540px]">
-        <div class="flex justify-between items-center mb-2 px-1">
-          <span class="text-xs font-bold uppercase text-slate-400">Live Official Receipt Preview</span>
-          <button onclick="resetForNewReceipt()" class="text-xs text-emerald-800 font-semibold hover:underline">
-            + New Blank Receipt
-          </button>
-        </div>
+      <div class="w-full max-w-[520px] flex justify-between items-center mb-2 px-1">
+        <span class="text-xs font-bold uppercase text-slate-400">Live Official Receipt Preview</span>
+        <span class="text-xs text-emerald-800 font-medium">Exact Sample Proportions (520×755)</span>
+      </div>
 
+      <div id="receipt-wrapper">
         <!-- RECEIPT CANVAS (CONVERTS TO HIGH-RES PDF) -->
-        <div id="receipt-canvas" class="bg-[#faf9f5] p-2.5 shadow-xl">
+        <div id="receipt-canvas" class="p-3 shadow-2xl select-none">
           <!-- Outer Dark Green Border -->
-          <div class="border-[3.5px] border-[#0b3b24] p-1">
+          <div class="border-[4px] border-[#0b3b24] p-[3px] h-full">
             <!-- Inner Gold Border -->
-            <div class="border-[1.5px] border-[#b89758] bg-[#faf9f5] relative overflow-hidden">
+            <div class="border-[1.5px] border-[#b89758] bg-[#faf8f2] h-full flex flex-col justify-between relative">
 
-              <!-- TOP LOGO SECTION (Uses logo.png if uploaded, or exact SVG replica) -->
-              <div class="pt-5 pb-3 px-6 text-center">
-                
-                <!-- If you upload your image as logo.png in GitHub, it loads automatically; otherwise shows crisp SVG replica -->
-                <img id="uploadedLogo" src="logo.png" alt="Islaah Foundation" 
-                  class="mx-auto h-36 object-contain hidden"
-                  onload="this.classList.remove('hidden'); document.getElementById('svgLogoFallback').classList.add('hidden');"
-                  onerror="this.classList.add('hidden');">
+              <!-- TOP LOGO SECTION -->
+              <div>
+                <div class="pt-4 pb-2 px-6 text-center">
+                  <!-- Uses logo.png if uploaded to GitHub, otherwise displays crisp vector replica -->
+                  <img id="uploadedLogo" src="logo.png" alt="Islaah Foundation" 
+                    class="mx-auto h-32 object-contain hidden"
+                    onload="this.classList.remove('hidden'); document.getElementById('svgLogoFallback').classList.add('hidden');"
+                    onerror="this.classList.add('hidden');">
 
-                <div id="svgLogoFallback">
-                  <div class="flex justify-center mb-1">
-                    <!-- Exact Vector Replica of Your Attached Logo (Crescent + Left Minaret + 3 Domes + Double Arch) -->
-                    <svg width="175" height="92" viewBox="0 0 220 112" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <!-- Gold Crescent & Star -->
-                      <path d="M111 6C103.5 6 97.5 12 97.5 19.5C97.5 27 103.5 33 111 33C114.2 33 117 31.8 119.2 29.9C113.2 31.2 107.5 26.8 107.5 20.5C107.5 14.2 113.2 9.8 119.2 11.1C117 9.2 114.2 6 111 6Z" fill="#b89758"/>
-                      <polygon points="115.5,14.5 116.9,17.6 120.2,18.1 117.8,20.4 118.4,23.7 115.5,22.1 112.6,23.7 113.2,20.4 110.8,18.1 114.1,17.6" fill="#b89758"/>
-                      <!-- Center Dome Finial -->
-                      <path d="M110 33 L111.5 41 L108.5 41 Z" fill="#0b3b24"/>
-                      <circle cx="110" cy="39" r="2" fill="#0b3b24"/>
-                      <!-- Main Center Onion Dome -->
-                      <path d="M82 90 C80 65, 97 53, 110 41 C123 53, 140 65, 138 90 Z" fill="#0b3b24"/>
-                      <!-- Left Tall Minaret (Matches attached logo) -->
-                      <rect x="75" y="54" width="8.5" height="36" fill="#0e482c"/>
-                      <rect x="73.5" y="52" width="11.5" height="2.5" fill="#0b3b24"/>
-                      <!-- Minaret Arched Windows -->
-                      <rect x="76.8" y="56" width="1.8" height="4" rx="0.9" fill="#faf9f5"/>
-                      <rect x="80" y="56" width="1.8" height="4" rx="0.9" fill="#faf9f5"/>
-                      <!-- Minaret Top Cap & Mini Crescent -->
-                      <path d="M74.5 52 C74.5 45, 79.2 42, 79.2 39 C79.2 42, 84 45, 84 52 Z" fill="#0b3b24"/>
-                      <path d="M79.2 35.5 C77.8 35.5, 76.8 36.6, 76.8 38 C76.8 39.4, 77.8 40.5, 79.2 40.5 C78.3 40, 77.8 39, 77.8 38 C77.8 37, 78.3 36, 79.2 35.5 Z" fill="#0b3b24"/>
-                      <!-- Left Side Dome -->
-                      <path d="M62 61 L63 67 L61 67 Z" fill="#0b3b24"/>
-                      <path d="M47 90 C46 75, 55 69, 62 63 C69 69, 76 75, 76 90 Z" fill="#0b3b24"/>
-                      <!-- Right Side Dome -->
-                      <path d="M155 61 L156 67 L154 67 Z" fill="#0b3b24"/>
-                      <path d="M139 90 C139 75, 148 69, 155 63 C162 69, 171 75, 170 90 Z" fill="#0b3b24"/>
-                      <!-- Double Horizon Swooshes -->
-                      <path d="M24 95 Q110 78 196 95 Q110 83 24 95 Z" fill="#0b3b24"/>
-                      <path d="M15 101 Q110 84 205 101 Q110 91 15 101 Z" fill="#0b3b24"/>
-                    </svg>
-                  </div>
-
-                  <h1 class="text-[25px] font-extrabold text-[#0b3b24] tracking-[0.04em] leading-tight">
-                    ISLAAH FOUNDATION
-                  </h1>
-                  <div class="w-72 h-[1.2px] bg-[#b89758] mx-auto my-1.5"></div>
-                  <p class="font-serif-italic italic text-[#0b3b24] text-[14px]">
-                    (Serving Community with Integrity)
-                  </p>
-                </div>
-              </div>
-
-              <!-- DARK GREEN BANNER: DONATION RECEIPT -->
-              <div class="bg-[#0b3b24] border-y-[1.8px] border-[#b89758] py-2 text-center shadow-sm">
-                <h2 class="text-white font-bold text-[18px] tracking-[0.14em] uppercase">
-                  DONATION RECEIPT
-                </h2>
-              </div>
-
-              <!-- MAIN RECEIPT CONTENT -->
-              <div class="px-7 pt-5 pb-4 relative">
-
-                <!-- Receipt No, Date & QR Code -->
-                <div class="flex justify-between items-start">
-                  <div class="flex-1 pr-4">
-                    <div class="flex justify-between items-center border-b border-[#0b3b24]/50 pb-2 text-[13.5px]">
-                      <div>
-                        <span class="font-semibold text-slate-800">Receipt No:</span>
-                        <span id="prevReceiptNo" class="font-bold text-slate-950 ml-1">IF-0001</span>
-                      </div>
-                      <div>
-                        <span class="font-semibold text-slate-800">Date:</span>
-                        <span id="prevDate" class="font-bold text-slate-950 ml-1">21 October 2026</span>
-                      </div>
-                    </div>
-
-                    <!-- Received with thanks from -->
-                    <div class="mt-4 border-b border-slate-300 pb-2.5">
-                      <p class="text-[13.5px] text-slate-700 font-medium">Received with thanks from:</p>
-                      <p id="prevDonorName" class="text-[16.5px] font-bold text-slate-950 mt-1">Mr. Ahmed Khan</p>
-                    </div>
-                  </div>
-
-                  <!-- Right Side: QR Code -->
-                  <div class="flex flex-col items-center pl-2">
-                    <div class="border border-slate-300 p-1 bg-white">
-                      <img id="qrImage" src="https://api.qrserver.com/v1/create-qr-code/?size=95x95&data=https://islaahfoundation.org" 
-                        alt="Scan to Donate" class="w-[78px] h-[78px]" crossorigin="anonymous">
-                    </div>
-                    <span class="text-[9px] font-bold tracking-wider text-slate-800 mt-1 uppercase">SCAN TO DONATE</span>
-                  </div>
-                </div>
-
-                <!-- Amount, Payment Mode, Purpose + Red RECEIVED Stamp -->
-                <div class="relative mt-3 space-y-3 text-[14px]">
-                  
-                  <!-- Amount Received -->
-                  <div class="border-b border-slate-300 pb-2.5 flex items-baseline">
-                    <span class="text-slate-800 font-medium w-36">Amount Received:</span>
-                    <span class="text-[18px] font-extrabold text-slate-950">₹ <span id="prevAmount">1,000</span>/-</span>
-                  </div>
-
-                  <!-- Payment Mode -->
-                  <div class="border-b border-slate-300 pb-2.5 flex items-baseline">
-                    <span class="text-slate-800 font-medium w-36">Payment Mode:</span>
-                    <span id="prevPaymentMode" class="font-bold text-slate-950">UPI / Cash / Bank Transfer</span>
-                  </div>
-
-                  <!-- Purpose -->
-                  <div class="border-b border-[#0b3b24]/40 pb-2.5 flex items-baseline">
-                    <span class="text-slate-800 font-medium w-36">Purpose:</span>
-                    <span id="prevPurpose" class="font-bold text-slate-950">Donation</span>
-                  </div>
-
-                  <!-- RED RUBBER STAMP: RECEIVED / THANK YOU -->
-                  <div class="stamp-received absolute right-1 -top-3 w-[124px] h-[124px] rounded-full border-[3px] border-[#991b1b]/85 flex flex-col items-center justify-center text-[#991b1b]/85 pointer-events-none select-none bg-[#faf9f5]/75">
-                    <div class="w-[112px] h-[112px] rounded-full border border-dashed border-[#991b1b]/80 flex flex-col items-center justify-between py-2">
-                      <span class="text-[7.5px] tracking-[0.18em] font-bold">★ ISLAAH ★</span>
-                      <div class="bg-[#991b1b] text-white font-extrabold text-[15px] tracking-widest px-3 py-0.5 rounded-sm shadow-sm -mx-3 border border-white">
-                        RECEIVED
-                      </div>
-                      <span class="text-[8px] font-bold tracking-wider uppercase">THANK YOU</span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Dotted Line -->
-                <div class="border-b border-dotted border-slate-400 my-3"></div>
-
-                <!-- Appreciation Message -->
-                <div class="py-2 text-center font-serif-italic italic text-slate-900 text-[15px] leading-relaxed">
-                  <p>We sincerely appreciate your generous contribution.</p>
-                  <p>May Allah reward you abundantly.</p>
-                </div>
-
-                <div class="border-b border-slate-300 my-2"></div>
-
-                <!-- SIGNATURE & ISLAAH APPROVED SEAL -->
-                <div class="mt-3 pt-1 flex justify-between items-end relative">
-                  
-                  <!-- Left: Authorized Signatory + Custom Vector Calligraphic Signature -->
-                  <div class="text-center w-56">
-                    <p class="font-serif-italic italic text-[13.5px] text-slate-800 mb-0.5">Authorized Signatory</p>
-                    
-                    <!-- Custom Fountain-Pen Vector Signature Crafted for Islaah Foundation -->
-                    <div class="h-14 flex items-center justify-center relative">
-                      <svg width="175" height="52" viewBox="0 0 220 65" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M28 46 C18 22, 42 8, 50 24 C56 36, 36 52, 24 44 C16 38, 45 34, 62 36 C72 24, 66 18, 63 32 C61 40, 72 39, 79 31 C84 25, 86 12, 82 28 C79 38, 88 39, 96 32 C102 26, 95 38, 105 35 C112 33, 114 26, 109 35 C107 39, 118 37, 124 27 C129 18, 125 10, 121 26 C118 38, 128 36, 136 30 C142 26, 146 36, 155 33 C168 29, 185 24, 202 21" 
-                          stroke="#0b3b24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M42 51 Q115 39 188 34" stroke="#0b3b24" stroke-width="1.4" stroke-linecap="round"/>
-                        <text x="72" y="29" fill="#0b3b24" font-family="'Great Vibes', cursive" font-size="22" transform="rotate(-5 72 29)">Islaah</text>
+                  <div id="svgLogoFallback">
+                    <div class="flex justify-center mb-0.5">
+                      <svg width="165" height="84" viewBox="0 0 220 112" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M111 6C103.5 6 97.5 12 97.5 19.5C97.5 27 103.5 33 111 33C114.2 33 117 31.8 119.2 29.9C113.2 31.2 107.5 26.8 107.5 20.5C107.5 14.2 113.2 9.8 119.2 11.1C117 9.2 114.2 6 111 6Z" fill="#b89758"/>
+                        <polygon points="115.5,14.5 116.9,17.6 120.2,18.1 117.8,20.4 118.4,23.7 115.5,22.1 112.6,23.7 113.2,20.4 110.8,18.1 114.1,17.6" fill="#b89758"/>
+                        <path d="M110 33 L111.5 41 L108.5 41 Z" fill="#0b3b24"/>
+                        <circle cx="110" cy="39" r="2" fill="#0b3b24"/>
+                        <path d="M82 90 C80 65, 97 53, 110 41 C123 53, 140 65, 138 90 Z" fill="#0b3b24"/>
+                        <rect x="75" y="54" width="8.5" height="36" fill="#0e482c"/>
+                        <rect x="73.5" y="52" width="11.5" height="2.5" fill="#0b3b24"/>
+                        <rect x="76.8" y="56" width="1.8" height="4" rx="0.9" fill="#faf8f2"/>
+                        <rect x="80" y="56" width="1.8" height="4" rx="0.9" fill="#faf8f2"/>
+                        <path d="M74.5 52 C74.5 45, 79.2 42, 79.2 39 C79.2 42, 84 45, 84 52 Z" fill="#0b3b24"/>
+                        <path d="M62 61 L63 67 L61 67 Z" fill="#0b3b24"/>
+                        <path d="M47 90 C46 75, 55 69, 62 63 C69 69, 76 75, 76 90 Z" fill="#0b3b24"/>
+                        <path d="M155 61 L156 67 L154 67 Z" fill="#0b3b24"/>
+                        <path d="M139 90 C139 75, 148 69, 155 63 C162 69, 171 75, 170 90 Z" fill="#0b3b24"/>
+                        <path d="M24 95 Q110 78 196 95 Q110 83 24 95 Z" fill="#0b3b24"/>
+                        <path d="M15 101 Q110 84 205 101 Q110 91 15 101 Z" fill="#0b3b24"/>
                       </svg>
                     </div>
+                    <h1 class="text-[24px] font-extrabold text-[#0b3b24] tracking-[0.04em] leading-tight">
+                      ISLAAH FOUNDATION
+                    </h1>
+                    <div class="w-64 h-[1.2px] bg-[#b89758] mx-auto my-1"></div>
+                    <p class="font-serif-italic italic text-[#1e3a2f] text-[13.5px]">
+                      (Serving Community with Integrity)
+                    </p>
+                  </div>
+                </div>
+
+                <!-- DARK GREEN BANNER: DONATION RECEIPT -->
+                <div class="bg-[#0b3b24] border-y-[2px] border-[#b89758] py-2 text-center shadow-sm">
+                  <h2 class="text-white font-bold text-[18px] tracking-[0.12em] uppercase">
+                    DONATION RECEIPT
+                  </h2>
+                </div>
+
+                <!-- MAIN RECEIPT CONTENT -->
+                <div class="px-7 pt-4 relative">
+
+                  <!-- Row 1: Left (Receipt No, Date, Received From) + Right (QR Code) -->
+                  <div class="flex justify-between items-start">
                     
-                    <div class="border-b border-slate-600 w-full mb-1"></div>
-                    <p class="text-[11px] font-bold text-slate-900 tracking-wide uppercase">For ISLAAH FOUNDATION</p>
-                    <!-- Gold Diamond Line -->
-                    <div class="flex items-center justify-center mt-1">
-                      <div class="w-12 h-[1px] bg-[#b89758]"></div>
-                      <div class="w-2 h-2 bg-[#b89758] rotate-45 mx-1"></div>
-                      <div class="w-12 h-[1px] bg-[#b89758]"></div>
-                    </div>
-                  </div>
-
-                  <!-- Center-Right: Blue Circular "ISLAAH APPROVED" Stamp -->
-                  <div class="stamp-approved mr-12 mb-1 w-[110px] h-[110px] rounded-full border-[2.5px] border-[#1e3a8a]/85 flex items-center justify-center text-[#1e3a8a]/85 select-none">
-                    <div class="w-[100px] h-[100px] rounded-full border border-dashed border-[#1e3a8a]/80 flex flex-col items-center justify-between py-2">
-                      <span class="text-[10.5px] font-extrabold tracking-widest uppercase">ISLAAH</span>
-                      <div class="bg-[#1e3a8a] text-white font-bold text-[12px] tracking-widest px-2.5 py-0.5 rounded-sm border border-white">
-                        APPROVED
+                    <!-- Left Column inside Receipt -->
+                    <div class="flex-1 pr-4">
+                      <div class="flex justify-between items-center border-b border-[#0b3b24]/60 pb-2 text-[13.5px]">
+                        <div>
+                          <span class="font-semibold text-slate-800">Receipt No:</span>
+                          <span id="prevReceiptNo" class="font-bold text-slate-950 ml-1">IF-0001</span>
+                        </div>
+                        <div>
+                          <span class="font-semibold text-slate-800">Date:</span>
+                          <span id="prevDate" class="font-bold text-slate-950 ml-1">21 October 2026</span>
+                        </div>
                       </div>
-                      <span class="text-[8px] tracking-widest">★ ★ ★</span>
+
+                      <!-- Received with thanks from -->
+                      <div class="mt-4 pb-2.5 border-b border-slate-300">
+                        <p class="text-[13.5px] text-slate-800 font-medium">Received with thanks from:</p>
+                        <p id="prevDonorName" class="text-[16px] font-bold text-slate-950 mt-1.5">Mr. Ahmed Khan</p>
+                      </div>
+                    </div>
+
+                    <!-- Right Side: QR Code -->
+                    <div class="flex flex-col items-center pl-2">
+                      <div class="bg-white p-1 border border-slate-300">
+                        <img id="qrImage" src="https://api.qrserver.com/v1/create-qr-code/?size=95x95&data=https://islaahfoundation.org" 
+                          alt="Scan to Donate" class="w-[82px] h-[82px]" crossorigin="anonymous">
+                      </div>
+                      <span class="text-[8.5px] font-extrabold tracking-wider text-slate-900 mt-1 uppercase">SCAN TO DONATE</span>
                     </div>
                   </div>
 
-                </div>
+                  <!-- Rows: Amount, Payment Mode, Purpose + Exact Positioned Red Stamp -->
+                  <div class="relative mt-2.5 text-[14px]">
+                    
+                    <!-- Amount Received -->
+                    <div class="border-b border-slate-300 py-2.5 flex items-baseline">
+                      <span class="text-slate-800 font-medium w-32">Amount Received:</span>
+                      <span class="text-[17.5px] font-extrabold text-slate-950">₹ <span id="prevAmount">1,000</span>/-</span>
+                    </div>
 
-                <!-- FOOTER CONTACT DETAILS -->
-                <div class="mt-5 pt-2.5 border-t border-slate-300 text-center text-[12px] text-slate-900">
-                  <span class="font-bold">Contact:</span> <span id="prevOrgPhone" class="font-semibold">+91 98765 43210</span>
-                  <span class="mx-2 text-slate-400">|</span>
-                  <span class="font-bold">Email:</span> <span id="prevOrgEmail" class="font-semibold">info@islaahfoundation.org</span>
-                </div>
+                    <!-- Payment Mode -->
+                    <div class="border-b border-slate-300 py-2.5 flex items-baseline">
+                      <span class="text-slate-800 font-medium w-32">Payment Mode:</span>
+                      <span id="prevPaymentMode" class="font-bold text-slate-950">UPI</span>
+                    </div>
 
+                    <!-- Purpose (Displays Donation Type + Additional Purpose Info) -->
+                    <div class="py-2.5 flex items-baseline">
+                      <span class="text-slate-800 font-medium w-32 shrink-0">Purpose:</span>
+                      <span id="prevPurpose" class="font-bold text-slate-950">Monthly Donation</span>
+                    </div>
+
+                    <!-- EXACT RED "RECEIVED / THANK YOU" STAMP (Right side over Amount & Payment Mode) -->
+                    <div class="absolute right-0 -top-2 w-[132px] h-[105px] flex items-center justify-center pointer-events-none select-none" style="transform: rotate(-10deg);">
+                      <div class="w-[100px] h-[100px] rounded-full border-[2.5px] border-[#a12323] flex items-center justify-center relative bg-[#faf8f2]/70">
+                        <div class="w-[90px] h-[90px] rounded-full border border-dashed border-[#a12323] flex flex-col items-center justify-between py-2">
+                          <span class="text-[8px] text-[#a12323] font-bold tracking-[0.2em]">★ ★ ★ ★ ★</span>
+                          <span class="text-[7.5px] text-[#a12323] font-extrabold tracking-wider uppercase mb-0.5">THANK YOU</span>
+                        </div>
+                        <div class="absolute w-[128px] bg-[#a12323] border-y-2 border-white py-0.5 text-center shadow-sm">
+                          <span class="text-white font-extrabold text-[15px] tracking-[0.12em] block leading-tight">RECEIVED</span>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  <!-- Dotted Divider -->
+                  <div class="border-b border-dotted border-slate-400 my-2.5"></div>
+
+                  <!-- Appreciation Message -->
+                  <div class="py-2 text-center font-serif-italic italic text-slate-900 text-[14.5px] leading-relaxed">
+                    <p>We sincerely appreciate your generous contribution.</p>
+                    <p>May Allah reward you abundantly.</p>
+                  </div>
+
+                  <!-- Solid Thin Divider -->
+                  <div class="border-b border-slate-300 mt-2"></div>
+
+                  <!-- BOTTOM SIGNATURE (M AFZAL - TREASURER) & BLUE ISLAAH APPROVED STAMP -->
+                  <div class="mt-4 pt-1 flex items-end justify-between relative">
+                    
+                    <!-- Left: Authorized Signatory + M Afzal + Treasurer -->
+                    <div class="w-48 text-center">
+                      <div class="border-t border-slate-400 pt-1 mb-0.5">
+                        <p class="font-serif-italic italic text-[13px] text-slate-800">Authorized Signatory</p>
+                      </div>
+                      
+                      <!-- Calligraphic Fountain Pen Signature for M Afzal -->
+                      <div class="h-12 flex items-center justify-center relative -my-1">
+                        <span class="font-signature text-[36px] text-slate-900 -rotate-3 block leading-none">
+                          M. Afzal
+                        </span>
+                      </div>
+                      
+                      <div class="border-b border-slate-700 w-full mb-1"></div>
+                      <p class="text-[11px] font-extrabold text-[#0b3b24] uppercase tracking-wider leading-tight">Treasurer</p>
+                      <p class="text-[10px] font-bold text-slate-800 tracking-wide uppercase mt-0.5">For ISLAAH FOUNDATION</p>
+                      
+                      <!-- Gold Diamond Line -->
+                      <div class="flex items-center justify-center mt-1">
+                        <div class="w-12 h-[1px] bg-[#b89758]"></div>
+                        <div class="w-2 h-2 bg-[#b89758] rotate-45 mx-1"></div>
+                        <div class="w-12 h-[1px] bg-[#b89758]"></div>
+                      </div>
+                    </div>
+
+                    <!-- Center: Blue Circular "ISLAAH APPROVED" Stamp -->
+                    <div class="mr-24 mb-1 w-[115px] h-[96px] flex items-center justify-center select-none" style="transform: rotate(-11deg);">
+                      <div class="w-[92px] h-[92px] rounded-full border-[2.5px] border-[#1e3a78] flex items-center justify-center relative bg-[#faf8f2]/70">
+                        <div class="w-[82px] h-[82px] rounded-full border border-dashed border-[#1e3a78] flex flex-col items-center justify-between py-1.5">
+                          <span class="text-[10px] font-extrabold tracking-widest text-[#1e3a78] uppercase">ISLAAH</span>
+                          <span class="text-[8px] text-[#1e3a78] tracking-widest">★ ★ ★ ★</span>
+                        </div>
+                        <div class="absolute w-[112px] bg-[#1e3a78] border-y border-white py-0.5 text-center shadow-sm">
+                          <span class="text-white font-extrabold text-[12px] tracking-[0.12em] block leading-tight">APPROVED</span>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
               </div>
+
+              <!-- FOOTER CONTACT DETAILS -->
+              <div class="px-6 pb-3 pt-2">
+                <div class="border-t border-slate-400 pt-2 text-center text-[11.5px] text-slate-900">
+                  <span class="font-bold">Contact:</span> <span class="font-semibold">+91 70451 51814</span>
+                  <span class="mx-1.5 text-slate-400">|</span>
+                  <span class="font-bold">Email:</span> <span class="font-semibold">feedback.islaahfoundation@gmail.com</span>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
         <!-- ================= END RECEIPT CANVAS ================= -->
-
       </div>
     </div>
 
   </main>
 
-  <!-- RECENT RECEIPTS HISTORY TABLE (FROM FIREBASE) -->
+  <!-- RECENT RECEIPTS HISTORY TABLE -->
   <section class="max-w-6xl mx-auto px-4 mt-6">
     <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
       <div class="flex justify-between items-center mb-3">
-        <h3 class="text-sm font-bold text-[#0b3b24] uppercase tracking-wider">Recent Saved Receipts (Firebase History)</h3>
-        <button onclick="loadRecentDonations()" class="text-xs text-emerald-700 font-semibold hover:underline">↻ Refresh</button>
+        <h3 class="text-sm font-bold text-[#0b3b24] uppercase tracking-wider">Saved Donors & Receipt History (Firebase)</h3>
+        <button onclick="loadRecentDonations()" class="text-xs text-emerald-700 font-semibold hover:underline">↻ Refresh Database</button>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs border-collapse">
@@ -408,8 +427,8 @@
               <th class="py-2 px-3">Date</th>
               <th class="py-2 px-3">Donor Name</th>
               <th class="py-2 px-3">Amount</th>
-              <th class="py-2 px-3">Purpose</th>
-              <th class="py-2 px-3">Phone</th>
+              <th class="py-2 px-3">Payment Mode</th>
+              <th class="py-2 px-3">Donation Type / Purpose</th>
               <th class="py-2 px-3 text-right">Action</th>
             </tr>
           </thead>
@@ -421,12 +440,11 @@
     </div>
   </section>
 
-  <!-- FIREBASE + PDF + WHATSAPP/EMAIL SCRIPT -->
+  <!-- FIREBASE + PDF + SMART DONOR LOOKUP SCRIPT -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-    // YOUR LIVE ISLAAH FOUNDATION FIREBASE CONFIG
     const firebaseConfig = {
       apiKey: "AIzaSyAfXgyw7gzR1DREKsFI3PMeh69IbwzFSnQ",
       authDomain: "islaah-aamaal-circle-5b74e.firebaseapp.com",
@@ -440,67 +458,148 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // Default Date (e.g., 21 October 2026)
-    const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-    document.getElementById('receiptDate').value = todayStr;
-    document.getElementById('prevDate').innerText = todayStr;
+    // Initialize Datepicker with Today's Date
+    const todayISO = new Date().toISOString().split('T')[0];
+    document.getElementById('receiptDateInput').value = todayISO;
 
-    // Load saved org settings from localStorage
-    if (localStorage.getItem('islaah_orgPhone')) document.getElementById('orgPhone').value = localStorage.getItem('islaah_orgPhone');
-    if (localStorage.getItem('islaah_orgEmail')) document.getElementById('orgEmail').value = localStorage.getItem('islaah_orgEmail');
+    function formatDisplayDate(isoStr) {
+      if (!isoStr) return '';
+      const [y, m, d] = isoStr.split('-');
+      const dateObj = new Date(y, m - 1, d);
+      return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+    }
+
+    // Helper: Combine Donation Type + Additional Purpose Info cleanly
+    function getCombinedPurposeText() {
+      const dType = document.getElementById('donationType').value;
+      const extraPurpose = document.getElementById('purposeInfo').value.trim();
+      return extraPurpose ? `${dType} (${extraPurpose})` : dType;
+    }
+
     if (localStorage.getItem('islaah_qrData')) document.getElementById('qrData').value = localStorage.getItem('islaah_qrData');
     if (localStorage.getItem('islaah_gsheetUrl')) document.getElementById('gsheetUrl').value = localStorage.getItem('islaah_gsheetUrl');
 
-    let lastDrivePdfUrl = '';
+    let savedDonorsMap = {};
     let recentList = [];
+    let isCurrentDonorExisting = false;
+    let activeDonorPhone = '';
+    let activeDonorEmail = '';
+    let lastDrivePdfUrl = '';
+    let hasLoggedCurrentReceipt = false;
 
     window.saveOrgSettings = function() {
-      localStorage.setItem('islaah_orgPhone', document.getElementById('orgPhone').value);
-      localStorage.setItem('islaah_orgEmail', document.getElementById('orgEmail').value);
       localStorage.setItem('islaah_qrData', document.getElementById('qrData').value);
       localStorage.setItem('islaah_gsheetUrl', document.getElementById('gsheetUrl').value);
-      window.updateReceipt();
       const qrVal = document.getElementById('qrData').value || 'https://islaahfoundation.org';
       document.getElementById('qrImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=95x95&data=${encodeURIComponent(qrVal)}`;
     };
 
+    // Check if typed Donor Name exists in Firebase
+    window.handleDonorNameInput = function() {
+      hasLoggedCurrentReceipt = false;
+      const typedName = document.getElementById('donorName').value.trim();
+      const lookupKey = typedName.toLowerCase();
+
+      const badge = document.getElementById('donorBadge');
+      const newContactSec = document.getElementById('newDonorContactSection');
+      const existingBanner = document.getElementById('existingDonorBanner');
+      const saveBtn = document.getElementById('saveBtn');
+      const phoneInput = document.getElementById('donorPhone');
+
+      if (lookupKey && savedDonorsMap[lookupKey]) {
+        // EXISTING DONOR FOUND: Hide Phone/Email inputs & Hide Save Button
+        isCurrentDonorExisting = true;
+        const matched = savedDonorsMap[lookupKey];
+        activeDonorPhone = matched.phone || '';
+        activeDonorEmail = matched.email || '';
+
+        badge.innerText = 'Existing Donor ✓';
+        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800';
+
+        newContactSec.classList.add('hidden');
+        phoneInput.removeAttribute('required');
+
+        document.getElementById('extractedPhoneDisplay').innerText = activeDonorPhone || 'Not provided';
+        document.getElementById('extractedEmailDisplay').innerText = activeDonorEmail || 'Not provided';
+        existingBanner.classList.remove('hidden');
+
+        // Hide Save Button for Existing Donors
+        saveBtn.classList.add('hidden');
+      } else {
+        // NEW DONOR: Show Phone/Email inputs & Show Save Button
+        isCurrentDonorExisting = false;
+        activeDonorPhone = document.getElementById('donorPhone').value.trim();
+        activeDonorEmail = document.getElementById('donorEmail').value.trim();
+
+        badge.innerText = 'New Donor';
+        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800';
+
+        newContactSec.classList.remove('hidden');
+        phoneInput.setAttribute('required', 'required');
+        existingBanner.classList.add('hidden');
+
+        saveBtn.classList.remove('hidden');
+      }
+
+      window.updateReceipt();
+    };
+
     window.updateReceipt = function() {
       document.getElementById('prevReceiptNo').innerText = document.getElementById('receiptNo').value || 'IF-0001';
-      document.getElementById('prevDate').innerText = document.getElementById('receiptDate').value || todayStr;
+      const isoDate = document.getElementById('receiptDateInput').value;
+      document.getElementById('prevDate').innerText = formatDisplayDate(isoDate);
       document.getElementById('prevDonorName').innerText = document.getElementById('donorName').value || 'Mr. Ahmed Khan';
       
       const rawAmt = document.getElementById('amount').value;
       document.getElementById('prevAmount').innerText = rawAmt ? Number(rawAmt).toLocaleString('en-IN') : '0';
       
-      document.getElementById('prevPaymentMode').innerText = document.getElementById('paymentMode').value || 'UPI';
-      document.getElementById('prevPurpose').innerText = document.getElementById('purpose').value || 'Donation';
-      document.getElementById('prevOrgPhone').innerText = document.getElementById('orgPhone').value;
-      document.getElementById('prevOrgEmail').innerText = document.getElementById('orgEmail').value;
+      document.getElementById('prevPaymentMode').innerText = document.getElementById('paymentMode').value;
+      document.getElementById('prevPurpose').innerText = getCombinedPurposeText();
     };
 
-    // Fetch Recent Receipts & Auto-Calculate Next Receipt Number (IF-0001, IF-0002...)
+    // Load all donors & receipts from Firebase
     window.loadRecentDonations = async function() {
       try {
-        const snap = await getDocs(collection(db, "donations"));
+        const q = query(collection(db, "donations"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+        
         const nextNum = snap.size + 1;
         const formattedNext = 'IF-' + String(nextNum).padStart(4, '0');
         document.getElementById('receiptNo').value = formattedNext;
         document.getElementById('prevReceiptNo').innerText = formattedNext;
 
-        const q = query(collection(db, "donations"), orderBy("createdAt", "desc"), limit(10));
-        const recentSnap = await getDocs(q);
+        savedDonorsMap = {};
         recentList = [];
+        const datalist = document.getElementById('existingDonorsList');
+        datalist.innerHTML = '';
         const tbody = document.getElementById('historyTableBody');
-        
-        if (recentSnap.empty) {
+
+        if (snap.empty) {
           tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-slate-400">No receipts generated yet. Enter your first donation above!</td></tr>`;
           return;
         }
 
         tbody.innerHTML = '';
-        recentSnap.forEach((docSnap, idx) => {
+        snap.forEach((docSnap) => {
           const d = docSnap.data();
           recentList.push(d);
+
+          if (d.donorName) {
+            const key = d.donorName.trim().toLowerCase();
+            if (!savedDonorsMap[key]) {
+              savedDonorsMap[key] = {
+                donorName: d.donorName.trim(),
+                phone: d.phone || '',
+                email: d.email || ''
+              };
+              const opt = document.createElement('option');
+              opt.value = d.donorName.trim();
+              datalist.appendChild(opt);
+            }
+          }
+        });
+
+        recentList.slice(0, 10).forEach((d, idx) => {
           const tr = document.createElement('tr');
           tr.className = "hover:bg-slate-50";
           tr.innerHTML = `
@@ -508,11 +607,11 @@
             <td class="py-2 px-3">${d.date || ''}</td>
             <td class="py-2 px-3 font-semibold">${d.donorName || ''}</td>
             <td class="py-2 px-3 font-bold">₹${Number(d.amount || 0).toLocaleString('en-IN')}</td>
-            <td class="py-2 px-3">${d.purpose || ''}</td>
-            <td class="py-2 px-3">${d.phone || ''}</td>
+            <td class="py-2 px-3">${d.paymentMode || ''}</td>
+            <td class="py-2 px-3">${d.purpose || d.donationType || ''}</td>
             <td class="py-2 px-3 text-right">
-              <button onclick="loadReceiptFromHistory(${recentList.length - 1})" class="text-emerald-700 font-semibold hover:underline">
-                View / Resend
+              <button onclick="loadReceiptFromHistory(${idx})" class="text-emerald-700 font-semibold hover:underline">
+                Select Donor
               </button>
             </td>
           `;
@@ -526,34 +625,33 @@
     window.loadReceiptFromHistory = function(index) {
       const d = recentList[index];
       if (!d) return;
-      document.getElementById('receiptNo').value = d.receiptNo || '';
-      document.getElementById('receiptDate').value = d.date || '';
       document.getElementById('donorName').value = d.donorName || '';
       document.getElementById('amount').value = d.amount || '';
-      document.getElementById('paymentMode').value = d.paymentMode || '';
-      document.getElementById('purpose').value = d.purpose || '';
-      document.getElementById('donorPhone').value = d.phone || '';
-      document.getElementById('donorEmail').value = d.email || '';
-      window.updateReceipt();
+      document.getElementById('paymentMode').value = d.paymentMode || 'UPI';
+      document.getElementById('donationType').value = d.donationType || 'Monthly Donation';
+      document.getElementById('purposeInfo').value = d.purposeInfo || '';
+      window.handleDonorNameInput();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     window.resetForNewReceipt = function() {
       document.getElementById('donorName').value = '';
       document.getElementById('amount').value = '';
+      document.getElementById('purposeInfo').value = '';
       document.getElementById('donorPhone').value = '';
       document.getElementById('donorEmail').value = '';
+      document.getElementById('receiptDateInput').value = todayISO;
       document.getElementById('saveBtn').innerText = '💾 Save to Firebase + GSheet & Lock Receipt';
+      hasLoggedCurrentReceipt = false;
       window.loadRecentDonations();
-      window.updateReceipt();
+      window.handleDonorNameInput();
     };
 
-    // Generate PDF Blob & Base64
     async function generatePDFData() {
       const element = document.getElementById('receipt-canvas');
       const rNo = document.getElementById('receiptNo').value || 'IF-0001';
       const opt = {
-        margin: 6,
+        margin: [6, 6, 6, 6],
         filename: `${rNo}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true },
@@ -565,49 +663,57 @@
       return { pdfBlob, pdfBase64 };
     }
 
-    // Save to Firebase Firestore + Google Sheets
+    async function saveRecordToDatabases() {
+      if (hasLoggedCurrentReceipt) return;
+      const phoneToSave = isCurrentDonorExisting ? activeDonorPhone : document.getElementById('donorPhone').value.trim();
+      const emailToSave = isCurrentDonorExisting ? activeDonorEmail : document.getElementById('donorEmail').value.trim();
+
+      const payload = {
+        receiptNo: document.getElementById('receiptNo').value,
+        date: formatDisplayDate(document.getElementById('receiptDateInput').value),
+        donorName: document.getElementById('donorName').value.trim(),
+        phone: phoneToSave,
+        email: emailToSave,
+        amount: Number(document.getElementById('amount').value || 0),
+        paymentMode: document.getElementById('paymentMode').value,
+        donationType: document.getElementById('donationType').value,
+        purposeInfo: document.getElementById('purposeInfo').value.trim(),
+        purpose: getCombinedPurposeText()
+      };
+
+      await addDoc(collection(db, "donations"), {
+        ...payload,
+        createdAt: serverTimestamp()
+      });
+
+      const gsheetWebhook = document.getElementById('gsheetUrl').value.trim();
+      if (gsheetWebhook) {
+        const { pdfBase64 } = await generatePDFData();
+        const res = await fetch(gsheetWebhook, {
+          method: 'POST',
+          body: JSON.stringify({ ...payload, pdfBase64, action: 'save' })
+        });
+        const data = await res.json();
+        if (data.pdfUrl) lastDrivePdfUrl = data.pdfUrl;
+      }
+
+      hasLoggedCurrentReceipt = true;
+      await window.loadRecentDonations();
+      window.handleDonorNameInput();
+    }
+
     window.handleSaveAndGenerate = async function(e) {
       e.preventDefault();
       const saveBtn = document.getElementById('saveBtn');
       const badge = document.getElementById('syncStatus');
       saveBtn.disabled = true;
-      saveBtn.innerText = 'Saving to Firebase & GSheet...';
+      saveBtn.innerText = 'Saving New Donor...';
       badge.innerText = 'Saving...';
 
-      const payload = {
-        receiptNo: document.getElementById('receiptNo').value,
-        date: document.getElementById('receiptDate').value,
-        donorName: document.getElementById('donorName').value,
-        phone: document.getElementById('donorPhone').value,
-        email: document.getElementById('donorEmail').value,
-        amount: Number(document.getElementById('amount').value),
-        paymentMode: document.getElementById('paymentMode').value,
-        purpose: document.getElementById('purpose').value
-      };
-
       try {
-        // 1. Save to Firebase Firestore
-        await addDoc(collection(db, "donations"), {
-          ...payload,
-          createdAt: serverTimestamp()
-        });
-
-        // 2. If Google Sheet Webhook URL is set, send data + PDF to Google Sheets & Drive
-        const gsheetWebhook = document.getElementById('gsheetUrl').value.trim();
-        if (gsheetWebhook) {
-          const { pdfBase64 } = await generatePDFData();
-          const res = await fetch(gsheetWebhook, {
-            method: 'POST',
-            body: JSON.stringify({ ...payload, pdfBase64, action: 'save' })
-          });
-          const data = await res.json();
-          if (data.pdfUrl) lastDrivePdfUrl = data.pdfUrl;
-        }
-
-        badge.innerText = 'Saved to Firebase ✓';
-        saveBtn.innerText = '✓ Saved! Click Below to Send PDF';
+        await saveRecordToDatabases();
+        badge.innerText = 'Donor Saved ✓';
         saveBtn.disabled = false;
-        window.loadRecentDonations();
       } catch (err) {
         console.error("Save error:", err);
         alert("Error saving to Firebase: " + err.message);
@@ -617,23 +723,37 @@
       }
     };
 
-    // Share PDF Directly via WhatsApp / Mobile Share Sheet
     window.sharePDFViaWhatsApp = async function() {
+      const donorName = document.getElementById('donorName').value.trim();
+      const rawAmt = document.getElementById('amount').value;
+      if (!donorName || !rawAmt) {
+        alert("Please enter Donor Name and Amount first.");
+        return;
+      }
+
       const waBtn = document.getElementById('waBtn');
-      waBtn.innerText = 'Preparing PDF...';
+      waBtn.innerText = 'Preparing PDF & Syncing...';
+
       const rNo = document.getElementById('receiptNo').value;
-      const donorName = document.getElementById('donorName').value || 'Donor';
-      const amount = Number(document.getElementById('amount').value || 0).toLocaleString('en-IN');
-      const purpose = document.getElementById('purpose').value;
-      let phone = document.getElementById('donorPhone').value.replace(/\D/g, '');
+      const amount = Number(rawAmt).toLocaleString('en-IN');
+      const combinedPurpose = getCombinedPurposeText();
+      
+      let rawPhone = isCurrentDonorExisting ? activeDonorPhone : document.getElementById('donorPhone').value;
+      let phone = (rawPhone || '').replace(/\D/g, '');
       if (phone.length === 10) phone = '91' + phone;
+
+      try {
+        await saveRecordToDatabases();
+      } catch (e) {
+        console.warn("Auto-log note:", e);
+      }
 
       const { pdfBlob } = await generatePDFData();
       const pdfFile = new File([pdfBlob], `${rNo}_${donorName.replace(/\s+/g, '_')}.pdf`, { type: 'application/pdf' });
 
-      const message = `Assalamu Alaikum *${donorName}*,\n\nJazakAllah Khair for your generous contribution of *₹${amount}/-* to *Islaah Foundation* (${purpose}).\n*Receipt No:* ${rNo}\n\nMay Allah reward you abundantly.`;
+      const message = `Assalamu Alaikum *${donorName}*,\n\nJazakAllah Khair for your generous contribution of *₹${amount}/-* to *Islaah Foundation* (${combinedPurpose}).\n*Receipt No:* ${rNo}\n\nMay Allah reward you abundantly.`;
 
-      waBtn.innerText = '📲 Send PDF to Donor\'s Phone (WhatsApp / Share)';
+      waBtn.innerText = '📲 Send PDF via WhatsApp / Phone';
 
       if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
         await navigator.share({
@@ -648,15 +768,22 @@
       }
     };
 
-    // Email PDF Directly
     window.sendPDFViaEmail = async function() {
-      const email = document.getElementById('donorEmail').value;
+      const email = isCurrentDonorExisting ? activeDonorEmail : document.getElementById('donorEmail').value.trim();
       if (!email) {
-        alert("Please enter the Donor's Email address first.");
+        alert("No email found for this donor. Please enter an email address.");
         return;
       }
+
       const btn = document.getElementById('emailBtn');
       btn.innerText = 'Sending...';
+
+      try {
+        await saveRecordToDatabases();
+      } catch (e) {
+        console.warn("Auto-log note:", e);
+      }
+
       const { pdfBase64 } = await generatePDFData();
       const gsheetWebhook = document.getElementById('gsheetUrl').value.trim();
 
@@ -668,7 +795,7 @@
             donorName: document.getElementById('donorName').value,
             email: email,
             amount: document.getElementById('amount').value,
-            purpose: document.getElementById('purpose').value,
+            purpose: getCombinedPurposeText(),
             pdfBase64: pdfBase64,
             action: 'email_only'
           })
@@ -685,7 +812,7 @@
       const element = document.getElementById('receipt-canvas');
       const rNo = document.getElementById('receiptNo').value || 'IF-0001';
       html2pdf().set({
-        margin: 6,
+        margin: [6, 6, 6, 6],
         filename: `${rNo}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true },
@@ -693,8 +820,8 @@
       }).from(element).save();
     };
 
-    // Initialize Settings & History on Load
     window.saveOrgSettings();
+    window.updateReceipt();
     window.loadRecentDonations();
   </script>
 </body>
