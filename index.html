@@ -7,26 +7,24 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts matching your exact sample receipt -->
   <link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
-  <!-- html2pdf.js for high-resolution PDF generation -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <!-- Direct html2canvas + jsPDF for 100% exact edge-to-edge PDF capture -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     .font-serif-italic { font-family: 'Playfair Display', Georgia, serif; }
     .font-signature { font-family: 'Alex Brush', cursive; }
     
-    /* Exact Fixed Proportions matching your sample receipt image */
     #receipt-wrapper {
       width: 100%;
       overflow-x: auto;
-      display: flex;
-      justify-content: center;
+      padding-bottom: 8px;
     }
     #receipt-canvas {
       width: 520px;
       min-width: 520px;
-      height: 755px;
-      min-height: 755px;
       background-color: #faf8f2;
       box-sizing: border-box;
+      margin: 0 auto;
     }
   </style>
 </head>
@@ -237,16 +235,16 @@
     <div class="lg:col-span-7 flex flex-col items-center">
       <div class="w-full max-w-[520px] flex justify-between items-center mb-2 px-1">
         <span class="text-xs font-bold uppercase text-slate-400">Live Official Receipt Preview</span>
-        <span class="text-xs text-emerald-800 font-medium">Full-Bleed 520×755 PDF Format</span>
+        <span class="text-xs text-emerald-800 font-medium">Zero-Shift Exact PDF Capture</span>
       </div>
 
       <div id="receipt-wrapper">
-        <!-- RECEIPT CANVAS (CONVERTS TO FULL-PAGE HIGH-RES PDF WITHOUT CUTTING OFF) -->
+        <!-- RECEIPT CANVAS -->
         <div id="receipt-canvas" class="p-3 shadow-2xl select-none">
           <!-- Outer Dark Green Border -->
-          <div class="border-[4px] border-[#0b3b24] p-[3px] h-full">
+          <div class="border-[4px] border-[#0b3b24] p-[3px]">
             <!-- Inner Gold Border -->
-            <div class="border-[1.5px] border-[#b89758] bg-[#faf8f2] h-full flex flex-col justify-between relative">
+            <div class="border-[1.5px] border-[#b89758] bg-[#faf8f2] flex flex-col justify-between relative">
 
               <!-- TOP LOGO SECTION -->
               <div>
@@ -416,9 +414,9 @@
                 </div>
               </div>
 
-              <!-- FOOTER CONTACT DETAILS -->
-              <div class="px-6 pb-3 pt-2">
-                <div class="border-t border-slate-400 pt-2 text-center text-[11.5px] text-slate-900">
+              <!-- FOOTER CONTACT DETAILS (Safely Inside Gold & Green Borders) -->
+              <div class="px-6 pt-4 pb-4 mt-2">
+                <div class="border-t border-slate-400 pt-2.5 text-center text-[11.5px] text-slate-900">
                   <span class="font-bold">Contact:</span> <span class="font-semibold">+91 70451 51814</span>
                   <span class="mx-1.5 text-slate-400">|</span>
                   <span class="font-bold">Email:</span> <span class="font-semibold">feedback.islaahfoundation@gmail.com</span>
@@ -462,7 +460,7 @@
     </div>
   </section>
 
-  <!-- FIREBASE + FULL-PAGE PDF FIX + SMART CONTACT UPDATER -->
+  <!-- FIREBASE + ZERO-SHIFT PDF ENGINE + SMART CONTACT UPDATER -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getFirestore, collection, doc, addDoc, updateDoc, getDocs, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -499,7 +497,6 @@
     if (localStorage.getItem('islaah_qrData')) document.getElementById('qrData').value = localStorage.getItem('islaah_qrData');
     if (localStorage.getItem('islaah_gsheetUrl')) document.getElementById('gsheetUrl').value = localStorage.getItem('islaah_gsheetUrl');
 
-    // savedDonorsMap stores: { "anas khan": { donorName, phone, email, docIds: [...] } }
     let savedDonorsMap = {};
     let recentList = [];
     let isCurrentDonorExisting = false;
@@ -515,13 +512,11 @@
       document.getElementById('qrImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=95x95&data=${encodeURIComponent(qrVal)}`;
     };
 
-    // Toggle the Edit / Add Email box for existing donors
     window.toggleEditExistingContact = function() {
       const box = document.getElementById('updateExistingContactBox');
       box.classList.toggle('hidden');
     };
 
-    // Save newly added Email or updated Phone for an Existing Donor across their Firebase records
     window.saveUpdatedDonorContact = async function() {
       const typedName = document.getElementById('donorName').value.trim();
       const lookupKey = typedName.toLowerCase();
@@ -535,7 +530,6 @@
       btn.disabled = true;
 
       try {
-        // Update all existing documents for this donor so future lookups have the email/phone
         for (const docId of matched.docIds) {
           await updateDoc(doc(db, "donations", docId), {
             phone: newPhone,
@@ -559,7 +553,6 @@
       }
     };
 
-    // Check if typed Donor Name exists in Firebase
     window.handleDonorNameInput = function() {
       hasLoggedCurrentReceipt = false;
       const typedName = document.getElementById('donorName').value.trim();
@@ -591,7 +584,6 @@
 
         existingBanner.classList.remove('hidden');
 
-        // If Email was NOT provided initially, automatically open the "Add Email" box!
         if (!activeDonorEmail) {
           document.getElementById('missingEmailPrompt').classList.remove('hidden');
           updateBox.classList.remove('hidden');
@@ -600,7 +592,6 @@
           updateBox.classList.add('hidden');
         }
 
-        // Hide Save Button for Existing Donors
         saveBtn.classList.add('hidden');
       } else {
         isCurrentDonorExisting = false;
@@ -633,7 +624,6 @@
       document.getElementById('prevPurpose').innerText = getCombinedPurposeText();
     };
 
-    // Load all donors & receipts from Firebase
     window.loadRecentDonations = async function() {
       try {
         const q = query(collection(db, "donations"), orderBy("createdAt", "desc"));
@@ -728,44 +718,59 @@
       window.handleDonorNameInput();
     };
 
-    // FIXED FULL-BLEED PDF GENERATOR (Prevents Half-PDF Cutoff on Mobile Scroll)
-    function getPDFOptions(rNo) {
-      return {
-        margin: 0,
-        filename: `${rNo}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          width: 520,
-          height: 755,
-          windowWidth: 600,
-          scrollX: 0,
-          scrollY: 0
-        },
-        jsPDF: {
-          unit: 'px',
-          format: [520, 755],
-          orientation: 'portrait',
-          hotfixes: ['px_scaling']
-        }
-      };
-    }
-
+    // ZERO-SHIFT FULL-BLEED PDF GENERATOR (Clones receipt at x:0, y:0 so it never shifts right or clips borders)
     async function generatePDFData() {
-      const element = document.getElementById('receipt-canvas');
-      const rNo = document.getElementById('receiptNo').value || 'IF-0001';
-      const opt = getPDFOptions(rNo);
-      const pdfBlob = await html2pdf().set(opt).from(element).outputPdf('blob');
-      const base64Uri = await html2pdf().set(opt).from(element).outputPdf('datauristring');
-      const pdfBase64 = base64Uri.split(',')[1];
-      return { pdfBlob, pdfBase64 };
+      const original = document.getElementById('receipt-canvas');
+      
+      // Create a temporary clone pinned to (0,0) with zero margin so html2canvas never shifts it right
+      const clone = original.cloneNode(true);
+      clone.style.position = 'fixed';
+      clone.style.top = '0px';
+      clone.style.left = '0px';
+      clone.style.margin = '0px';
+      clone.style.zIndex = '-9999';
+      clone.style.width = '520px';
+      document.body.appendChild(clone);
+
+      const w = clone.offsetWidth;
+      const h = clone.offsetHeight;
+
+      const canvas = await html2canvas(clone, {
+        scale: 2.5,
+        useCORS: true,
+        backgroundColor: '#faf8f2',
+        width: w,
+        height: h,
+        windowWidth: w,
+        windowHeight: h,
+        x: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0
+      });
+
+      document.body.removeChild(clone);
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.98);
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'px',
+        format: [w, h],
+        hotfixes: ['px_scaling']
+      });
+
+      pdf.addImage(imgData, 'JPEG', 0, 0, w, h);
+      const pdfBlob = pdf.output('blob');
+      const dataUri = pdf.output('datauristring');
+      const pdfBase64 = dataUri.split(',')[1];
+
+      return { pdf, pdfBlob, pdfBase64 };
     }
 
     async function saveRecordToDatabases() {
       if (hasLoggedCurrentReceipt) return;
       
-      // Check if admin typed an email into the existing-donor quick-update box
       if (isCurrentDonorExisting) {
         const inlineEditedEmail = document.getElementById('editExistingEmail').value.trim();
         const inlineEditedPhone = document.getElementById('editExistingPhone').value.trim();
@@ -856,7 +861,7 @@
         console.warn("Auto-log note:", e);
       }
 
-      const { pdfBlob } = await generatePDFData();
+      const { pdf, pdfBlob } = await generatePDFData();
       const pdfFile = new File([pdfBlob], `${rNo}_${donorName.replace(/\s+/g, '_')}.pdf`, { type: 'application/pdf' });
 
       const message = `Assalamu Alaikum *${donorName}*,\n\nJazakAllah Khair for your generous contribution of *₹${amount}/-* to *Islaah Foundation* (${combinedPurpose}).\n*Receipt No:* ${rNo}\n\nMay Allah reward you abundantly.`;
@@ -870,7 +875,7 @@
           files: [pdfFile]
         });
       } else {
-        window.downloadPDF();
+        pdf.save(`${rNo}.pdf`);
         const waMsg = lastDrivePdfUrl ? `${message}\n\nDownload Official Receipt PDF:\n${lastDrivePdfUrl}` : message;
         window.open(`https://wa.me/${phone}?text=${encodeURIComponent(waMsg)}`, '_blank');
       }
@@ -882,7 +887,6 @@
         : document.getElementById('donorEmail').value.trim();
 
       if (!email) {
-        // Open the add-email box and focus it so you can type it right in!
         if (isCurrentDonorExisting) {
           document.getElementById('updateExistingContactBox').classList.remove('hidden');
           document.getElementById('editExistingEmail').focus();
@@ -903,14 +907,15 @@
         console.warn("Auto-log note:", e);
       }
 
-      const { pdfBase64 } = await generatePDFData();
+      const { pdf, pdfBase64 } = await generatePDFData();
+      const rNo = document.getElementById('receiptNo').value || 'IF-0001';
       const gsheetWebhook = document.getElementById('gsheetUrl').value.trim();
 
       if (gsheetWebhook) {
         await fetch(gsheetWebhook, {
           method: 'POST',
           body: JSON.stringify({
-            receiptNo: document.getElementById('receiptNo').value,
+            receiptNo: rNo,
             donorName: document.getElementById('donorName').value,
             email: email,
             amount: document.getElementById('amount').value,
@@ -921,16 +926,16 @@
         });
         btn.innerText = '✓ Sent!';
       } else {
-        window.downloadPDF();
+        pdf.save(`${rNo}.pdf`);
         window.location.href = `mailto:${email}?subject=Donation Receipt - Islaah Foundation&body=Assalamu Alaikum, Please find your official donation receipt attached.`;
         btn.innerText = '✉️ Email PDF';
       }
     };
 
-    window.downloadPDF = function() {
-      const element = document.getElementById('receipt-canvas');
+    window.downloadPDF = async function() {
       const rNo = document.getElementById('receiptNo').value || 'IF-0001';
-      html2pdf().set(getPDFOptions(rNo)).from(element).save();
+      const { pdf } = await generatePDFData();
+      pdf.save(`${rNo}.pdf`);
     };
 
     window.saveOrgSettings();
