@@ -23,6 +23,7 @@
     #receipt-canvas {
       width: 520px;
       min-width: 520px;
+      height: 755px;
       min-height: 755px;
       background-color: #faf8f2;
       box-sizing: border-box;
@@ -90,15 +91,41 @@
             <datalist id="existingDonorsList"></datalist>
           </div>
 
-          <!-- Existing Donor Extracted Info Banner (Shown ONLY when existing donor is matched) -->
-          <div id="existingDonorBanner" class="hidden bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-900">
+          <!-- Existing Donor Extracted Info Banner + Option to Add/Edit Missing Email Later -->
+          <div id="existingDonorBanner" class="hidden bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-900 space-y-2">
             <div class="font-bold flex items-center justify-between">
               <span>✓ Existing Donor Found in Database</span>
+              <button type="button" onclick="toggleEditExistingContact()" class="text-[11px] text-emerald-700 underline font-semibold hover:text-emerald-950">
+                ✏️ Edit / Add Email
+              </button>
             </div>
-            <p class="mt-1 text-slate-600">
+            <p class="text-slate-600">
               📱 Phone: <strong id="extractedPhoneDisplay" class="text-slate-900">—</strong> | 
               ✉️ Email: <strong id="extractedEmailDisplay" class="text-slate-900">—</strong>
             </p>
+
+            <!-- Pop-up Box if Email was NOT provided initially or if Admin clicks "Edit / Add Email" -->
+            <div id="updateExistingContactBox" class="hidden pt-2 border-t border-emerald-200 space-y-2">
+              <p id="missingEmailPrompt" class="text-[11px] font-semibold text-amber-800">
+                ⚠️ Email was not provided initially. You can add or update contact details below:
+              </p>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[10px] font-semibold text-slate-600">Update Phone</label>
+                  <input type="tel" id="editExistingPhone" placeholder="9876543210"
+                    class="w-full px-2 py-1.5 border border-slate-300 rounded text-xs bg-white">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-semibold text-slate-600">Add / Update Email</label>
+                  <input type="email" id="editExistingEmail" placeholder="donor@email.com"
+                    class="w-full px-2 py-1.5 border border-slate-300 rounded text-xs bg-white">
+                </div>
+              </div>
+              <button type="button" id="updateContactBtn" onclick="saveUpdatedDonorContact()"
+                class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-1.5 rounded text-xs transition">
+                Save Updated Contact to Database
+              </button>
+            </div>
           </div>
 
           <!-- First-Time Donor Contact Fields (Shown ONLY for New Donors) -->
@@ -111,7 +138,7 @@
                   class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-700 outline-none">
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">Email ID</label>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Email ID (Optional)</label>
                 <input type="email" id="donorEmail" placeholder="donor@email.com"
                   class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-700 outline-none">
               </div>
@@ -145,6 +172,9 @@
                 <option value="Monthly Donation">Monthly Donation</option>
                 <option value="Zakat">Zakat</option>
                 <option value="Sadqa Nafila">Sadqa Nafila</option>
+                <option value="Lillah">Lillah</option>
+                <option value="Fitra">Fitra</option>
+                <option value="General Donation">General Donation</option>
               </select>
             </div>
             <div>
@@ -182,7 +212,7 @@
 
         <!-- STEP 2: DIRECT SHARE BUTTONS -->
         <div class="mt-5 pt-4 border-t border-slate-200 space-y-2.5">
-          <p class="text-xs font-bold uppercase text-slate-400">2. Share PDF Directly with Donor</p>
+          <p class="text-xs font-bold uppercase text-slate-400">2. Share Full PDF Directly with Donor</p>
           
           <button onclick="sharePDFViaWhatsApp()" type="button" id="waBtn"
             class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 shadow-sm transition text-sm">
@@ -207,11 +237,11 @@
     <div class="lg:col-span-7 flex flex-col items-center">
       <div class="w-full max-w-[520px] flex justify-between items-center mb-2 px-1">
         <span class="text-xs font-bold uppercase text-slate-400">Live Official Receipt Preview</span>
-        <span class="text-xs text-emerald-800 font-medium">Exact Sample Proportions (520×755)</span>
+        <span class="text-xs text-emerald-800 font-medium">Full-Bleed 520×755 PDF Format</span>
       </div>
 
       <div id="receipt-wrapper">
-        <!-- RECEIPT CANVAS (CONVERTS TO HIGH-RES PDF) -->
+        <!-- RECEIPT CANVAS (CONVERTS TO FULL-PAGE HIGH-RES PDF WITHOUT CUTTING OFF) -->
         <div id="receipt-canvas" class="p-3 shadow-2xl select-none">
           <!-- Outer Dark Green Border -->
           <div class="border-[4px] border-[#0b3b24] p-[3px] h-full">
@@ -221,7 +251,6 @@
               <!-- TOP LOGO SECTION -->
               <div>
                 <div class="pt-4 pb-2 px-6 text-center">
-                  <!-- Uses logo.png if uploaded to GitHub, otherwise displays crisp vector replica -->
                   <img id="uploadedLogo" src="logo.png" alt="Islaah Foundation" 
                     class="mx-auto h-32 object-contain hidden"
                     onload="this.classList.remove('hidden'); document.getElementById('svgLogoFallback').classList.add('hidden');"
@@ -270,8 +299,6 @@
 
                   <!-- Row 1: Left (Receipt No, Date, Received From) + Right (QR Code) -->
                   <div class="flex justify-between items-start">
-                    
-                    <!-- Left Column inside Receipt -->
                     <div class="flex-1 pr-4">
                       <div class="flex justify-between items-center border-b border-[#0b3b24]/60 pb-2 text-[13.5px]">
                         <div>
@@ -304,25 +331,22 @@
                   <!-- Rows: Amount, Payment Mode, Purpose + Exact Positioned Red Stamp -->
                   <div class="relative mt-2.5 text-[14px]">
                     
-                    <!-- Amount Received -->
                     <div class="border-b border-slate-300 py-2.5 flex items-baseline">
                       <span class="text-slate-800 font-medium w-32">Amount Received:</span>
                       <span class="text-[17.5px] font-extrabold text-slate-950">₹ <span id="prevAmount">1,000</span>/-</span>
                     </div>
 
-                    <!-- Payment Mode -->
                     <div class="border-b border-slate-300 py-2.5 flex items-baseline">
                       <span class="text-slate-800 font-medium w-32">Payment Mode:</span>
                       <span id="prevPaymentMode" class="font-bold text-slate-950">UPI</span>
                     </div>
 
-                    <!-- Purpose (Displays Donation Type + Additional Purpose Info) -->
                     <div class="py-2.5 flex items-baseline">
                       <span class="text-slate-800 font-medium w-32 shrink-0">Purpose:</span>
                       <span id="prevPurpose" class="font-bold text-slate-950">Monthly Donation</span>
                     </div>
 
-                    <!-- EXACT RED "RECEIVED / THANK YOU" STAMP (Right side over Amount & Payment Mode) -->
+                    <!-- EXACT RED "RECEIVED / THANK YOU" STAMP -->
                     <div class="absolute right-0 -top-2 w-[132px] h-[105px] flex items-center justify-center pointer-events-none select-none" style="transform: rotate(-10deg);">
                       <div class="w-[100px] h-[100px] rounded-full border-[2.5px] border-[#a12323] flex items-center justify-center relative bg-[#faf8f2]/70">
                         <div class="w-[90px] h-[90px] rounded-full border border-dashed border-[#a12323] flex flex-col items-center justify-between py-2">
@@ -358,7 +382,6 @@
                         <p class="font-serif-italic italic text-[13px] text-slate-800">Authorized Signatory</p>
                       </div>
                       
-                      <!-- Calligraphic Fountain Pen Signature for M Afzal -->
                       <div class="h-12 flex items-center justify-center relative -my-1">
                         <span class="font-signature text-[36px] text-slate-900 -rotate-3 block leading-none">
                           M. Afzal
@@ -369,7 +392,6 @@
                       <p class="text-[11px] font-extrabold text-[#0b3b24] uppercase tracking-wider leading-tight">Treasurer</p>
                       <p class="text-[10px] font-bold text-slate-800 tracking-wide uppercase mt-0.5">For ISLAAH FOUNDATION</p>
                       
-                      <!-- Gold Diamond Line -->
                       <div class="flex items-center justify-center mt-1">
                         <div class="w-12 h-[1px] bg-[#b89758]"></div>
                         <div class="w-2 h-2 bg-[#b89758] rotate-45 mx-1"></div>
@@ -440,10 +462,10 @@
     </div>
   </section>
 
-  <!-- FIREBASE + PDF + SMART DONOR LOOKUP SCRIPT -->
+  <!-- FIREBASE + FULL-PAGE PDF FIX + SMART CONTACT UPDATER -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getFirestore, collection, doc, addDoc, updateDoc, getDocs, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyAfXgyw7gzR1DREKsFI3PMeh69IbwzFSnQ",
@@ -458,7 +480,6 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // Initialize Datepicker with Today's Date
     const todayISO = new Date().toISOString().split('T')[0];
     document.getElementById('receiptDateInput').value = todayISO;
 
@@ -469,7 +490,6 @@
       return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
     }
 
-    // Helper: Combine Donation Type + Additional Purpose Info cleanly
     function getCombinedPurposeText() {
       const dType = document.getElementById('donationType').value;
       const extraPurpose = document.getElementById('purposeInfo').value.trim();
@@ -479,6 +499,7 @@
     if (localStorage.getItem('islaah_qrData')) document.getElementById('qrData').value = localStorage.getItem('islaah_qrData');
     if (localStorage.getItem('islaah_gsheetUrl')) document.getElementById('gsheetUrl').value = localStorage.getItem('islaah_gsheetUrl');
 
+    // savedDonorsMap stores: { "anas khan": { donorName, phone, email, docIds: [...] } }
     let savedDonorsMap = {};
     let recentList = [];
     let isCurrentDonorExisting = false;
@@ -494,6 +515,50 @@
       document.getElementById('qrImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=95x95&data=${encodeURIComponent(qrVal)}`;
     };
 
+    // Toggle the Edit / Add Email box for existing donors
+    window.toggleEditExistingContact = function() {
+      const box = document.getElementById('updateExistingContactBox');
+      box.classList.toggle('hidden');
+    };
+
+    // Save newly added Email or updated Phone for an Existing Donor across their Firebase records
+    window.saveUpdatedDonorContact = async function() {
+      const typedName = document.getElementById('donorName').value.trim();
+      const lookupKey = typedName.toLowerCase();
+      const matched = savedDonorsMap[lookupKey];
+      if (!matched) return;
+
+      const newPhone = document.getElementById('editExistingPhone').value.trim();
+      const newEmail = document.getElementById('editExistingEmail').value.trim();
+      const btn = document.getElementById('updateContactBtn');
+      btn.innerText = 'Updating Database...';
+      btn.disabled = true;
+
+      try {
+        // Update all existing documents for this donor so future lookups have the email/phone
+        for (const docId of matched.docIds) {
+          await updateDoc(doc(db, "donations", docId), {
+            phone: newPhone,
+            email: newEmail
+          });
+        }
+        activeDonorPhone = newPhone;
+        activeDonorEmail = newEmail;
+        matched.phone = newPhone;
+        matched.email = newEmail;
+
+        document.getElementById('extractedPhoneDisplay').innerText = activeDonorPhone || 'Not provided';
+        document.getElementById('extractedEmailDisplay').innerText = activeDonorEmail || 'Not provided';
+        document.getElementById('updateExistingContactBox').classList.add('hidden');
+        btn.innerText = 'Save Updated Contact to Database';
+        btn.disabled = false;
+      } catch (err) {
+        alert("Failed to update contact: " + err.message);
+        btn.innerText = 'Save Updated Contact to Database';
+        btn.disabled = false;
+      }
+    };
+
     // Check if typed Donor Name exists in Firebase
     window.handleDonorNameInput = function() {
       hasLoggedCurrentReceipt = false;
@@ -503,11 +568,11 @@
       const badge = document.getElementById('donorBadge');
       const newContactSec = document.getElementById('newDonorContactSection');
       const existingBanner = document.getElementById('existingDonorBanner');
+      const updateBox = document.getElementById('updateExistingContactBox');
       const saveBtn = document.getElementById('saveBtn');
       const phoneInput = document.getElementById('donorPhone');
 
       if (lookupKey && savedDonorsMap[lookupKey]) {
-        // EXISTING DONOR FOUND: Hide Phone/Email inputs & Hide Save Button
         isCurrentDonorExisting = true;
         const matched = savedDonorsMap[lookupKey];
         activeDonorPhone = matched.phone || '';
@@ -521,12 +586,23 @@
 
         document.getElementById('extractedPhoneDisplay').innerText = activeDonorPhone || 'Not provided';
         document.getElementById('extractedEmailDisplay').innerText = activeDonorEmail || 'Not provided';
+        document.getElementById('editExistingPhone').value = activeDonorPhone;
+        document.getElementById('editExistingEmail').value = activeDonorEmail;
+
         existingBanner.classList.remove('hidden');
+
+        // If Email was NOT provided initially, automatically open the "Add Email" box!
+        if (!activeDonorEmail) {
+          document.getElementById('missingEmailPrompt').classList.remove('hidden');
+          updateBox.classList.remove('hidden');
+        } else {
+          document.getElementById('missingEmailPrompt').classList.add('hidden');
+          updateBox.classList.add('hidden');
+        }
 
         // Hide Save Button for Existing Donors
         saveBtn.classList.add('hidden');
       } else {
-        // NEW DONOR: Show Phone/Email inputs & Show Save Button
         isCurrentDonorExisting = false;
         activeDonorPhone = document.getElementById('donorPhone').value.trim();
         activeDonorEmail = document.getElementById('donorEmail').value.trim();
@@ -590,11 +666,16 @@
               savedDonorsMap[key] = {
                 donorName: d.donorName.trim(),
                 phone: d.phone || '',
-                email: d.email || ''
+                email: d.email || '',
+                docIds: [docSnap.id]
               };
               const opt = document.createElement('option');
               opt.value = d.donorName.trim();
               datalist.appendChild(opt);
+            } else {
+              savedDonorsMap[key].docIds.push(docSnap.id);
+              if (!savedDonorsMap[key].phone && d.phone) savedDonorsMap[key].phone = d.phone;
+              if (!savedDonorsMap[key].email && d.email) savedDonorsMap[key].email = d.email;
             }
           }
         });
@@ -647,16 +728,34 @@
       window.handleDonorNameInput();
     };
 
+    // FIXED FULL-BLEED PDF GENERATOR (Prevents Half-PDF Cutoff on Mobile Scroll)
+    function getPDFOptions(rNo) {
+      return {
+        margin: 0,
+        filename: `${rNo}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          width: 520,
+          height: 755,
+          windowWidth: 600,
+          scrollX: 0,
+          scrollY: 0
+        },
+        jsPDF: {
+          unit: 'px',
+          format: [520, 755],
+          orientation: 'portrait',
+          hotfixes: ['px_scaling']
+        }
+      };
+    }
+
     async function generatePDFData() {
       const element = document.getElementById('receipt-canvas');
       const rNo = document.getElementById('receiptNo').value || 'IF-0001';
-      const opt = {
-        margin: [6, 6, 6, 6],
-        filename: `${rNo}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
+      const opt = getPDFOptions(rNo);
       const pdfBlob = await html2pdf().set(opt).from(element).outputPdf('blob');
       const base64Uri = await html2pdf().set(opt).from(element).outputPdf('datauristring');
       const pdfBase64 = base64Uri.split(',')[1];
@@ -665,6 +764,15 @@
 
     async function saveRecordToDatabases() {
       if (hasLoggedCurrentReceipt) return;
+      
+      // Check if admin typed an email into the existing-donor quick-update box
+      if (isCurrentDonorExisting) {
+        const inlineEditedEmail = document.getElementById('editExistingEmail').value.trim();
+        const inlineEditedPhone = document.getElementById('editExistingPhone').value.trim();
+        if (inlineEditedEmail && !activeDonorEmail) activeDonorEmail = inlineEditedEmail;
+        if (inlineEditedPhone && !activeDonorPhone) activeDonorPhone = inlineEditedPhone;
+      }
+
       const phoneToSave = isCurrentDonorExisting ? activeDonorPhone : document.getElementById('donorPhone').value.trim();
       const emailToSave = isCurrentDonorExisting ? activeDonorEmail : document.getElementById('donorEmail').value.trim();
 
@@ -732,7 +840,7 @@
       }
 
       const waBtn = document.getElementById('waBtn');
-      waBtn.innerText = 'Preparing PDF & Syncing...';
+      waBtn.innerText = 'Preparing Full PDF...';
 
       const rNo = document.getElementById('receiptNo').value;
       const amount = Number(rawAmt).toLocaleString('en-IN');
@@ -769,9 +877,17 @@
     };
 
     window.sendPDFViaEmail = async function() {
-      const email = isCurrentDonorExisting ? activeDonorEmail : document.getElementById('donorEmail').value.trim();
+      let email = isCurrentDonorExisting 
+        ? (activeDonorEmail || document.getElementById('editExistingEmail').value.trim()) 
+        : document.getElementById('donorEmail').value.trim();
+
       if (!email) {
-        alert("No email found for this donor. Please enter an email address.");
+        // Open the add-email box and focus it so you can type it right in!
+        if (isCurrentDonorExisting) {
+          document.getElementById('updateExistingContactBox').classList.remove('hidden');
+          document.getElementById('editExistingEmail').focus();
+        }
+        alert("Please enter the donor's Email address in the Email box first.");
         return;
       }
 
@@ -779,6 +895,9 @@
       btn.innerText = 'Sending...';
 
       try {
+        if (isCurrentDonorExisting && !activeDonorEmail) {
+          await window.saveUpdatedDonorContact();
+        }
         await saveRecordToDatabases();
       } catch (e) {
         console.warn("Auto-log note:", e);
@@ -811,13 +930,7 @@
     window.downloadPDF = function() {
       const element = document.getElementById('receipt-canvas');
       const rNo = document.getElementById('receiptNo').value || 'IF-0001';
-      html2pdf().set({
-        margin: [6, 6, 6, 6],
-        filename: `${rNo}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      }).from(element).save();
+      html2pdf().set(getPDFOptions(rNo)).from(element).save();
     };
 
     window.saveOrgSettings();
